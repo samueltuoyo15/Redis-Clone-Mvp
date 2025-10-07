@@ -1,7 +1,7 @@
-# GoRedis Clone MVP Server ⚡️
+# SamsDataStore TCP Server ⚡️
 
 ## Overview
-GoRedis Clone MVP is a high-performance, in-memory key-value store built in Go, designed to emulate a subset of Redis functionalities. This project demonstrates robust TCP networking, efficient RESP (REdis Serialization Protocol) parsing, and concurrent data handling with Time-To-Live (TTL) support, making it an excellent foundation for distributed caching or real-time data storage solutions. 🚀
+SamsDataStore Clone MVP is a high-performance, in-memory key-value store built in Go, designed to emulate a subset of Redis functionalities. This project demonstrates robust TCP networking, efficient RESP (REdis Serialization Protocol) parsing, and concurrent data handling with Time-To-Live (TTL) support, making it an excellent foundation for distributed caching or real-time data storage solutions. 🚀
 
 ## Features
 - **Concurrent TCP Server**: Manages multiple client connections simultaneously using goroutines for high throughput.
