@@ -4,7 +4,67 @@ import (
 	"bufio"
 	"fmt"
 	"net"
+	"sync"
+	"time"
 )
+
+type Store struct {
+	mu    sync.RWMutex
+	data  map[string]string
+	ttl   map[string]time.Time
+	clean chan struct{}
+}
+
+func NewStore() *Store {
+	s := &Store{
+		data:  make(map[string]string),
+		ttl:   make(map[string]time.Time),
+		clean: make(chan struct{}),
+	}
+	go s.StartTTLWorker()
+	return s
+}
+
+func (s *Store) StartTTLWorker() {
+	ticker := time.NewTicker(time.Second * 1)
+	for {
+		select {
+		case <-ticker.C:
+			now := time.Now()
+			s.mu.Lock()
+			for k, t := range s.ttl {
+				if t.Before(now) {
+					delete(s.data, k)
+					delete(s.ttl, k)
+				}
+			}
+			s.mu.Unlock()
+		case <-s.clean:
+			ticker.Stop()
+			return
+		}
+	}
+}
+
+func (s *Store) Close() {
+	close(s.clean)
+}
+
+func (s *Store) Get(key string) (string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if t, ok := s.ttl[key]; ok && time.Now().After(t) {
+		s.mu.RUnlock()
+		s.mu.Lock()
+		delete(s.data, key)
+		delete(s.ttl, key)
+		s.mu.Unlock()
+		return "", false
+	}
+	v, ok := s.data[key]
+	return v, ok
+}
 
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
