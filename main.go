@@ -2,96 +2,114 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
+	"io"
 	"net"
-	"sync"
+	"strconv"
+	"strings"
 	"time"
+
+	commands "github.com/samueltuoyo15/Redis-Clone-Mvp/commands"
+	utils "github.com/samueltuoyo15/Redis-Clone-Mvp/utils"
 )
 
-type Store struct {
-	mu    sync.RWMutex
-	data  map[string]string
-	ttl   map[string]time.Time
-	clean chan struct{}
-}
+// To read one complete RESP message (array form) and returns slice of argument
 
-func NewStore() *Store {
-	s := &Store{
-		data:  make(map[string]string),
-		ttl:   make(map[string]time.Time),
-		clean: make(chan struct{}),
+func parseRESP(reader *bufio.Reader) ([]string, error) {
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return nil, err
 	}
-	go s.StartTTLWorker()
-	return s
-}
+	line = strings.TrimRight(line, "\r\n")
+	if len(line) == 0 {
+		return nil, errors.New("Empty line")
+	}
 
-func (s *Store) StartTTLWorker() {
-	ticker := time.NewTicker(time.Second * 1)
-	for {
-		select {
-		case <-ticker.C:
-			now := time.Now()
-			s.mu.Lock()
-			for k, t := range s.ttl {
-				if t.Before(now) {
-					delete(s.data, k)
-					delete(s.ttl, k)
-				}
-			}
-			s.mu.Unlock()
-		case <-s.clean:
-			ticker.Stop()
-			return
+	if line[0] == '*' {
+		// Array of bulk strings
+		count, err := strconv.Atoi(line[1:])
+		if err != nil {
+			return nil, err
 		}
+		args := make([]string, 0, count)
+		for i := 0; i < count; i++ {
+			sizeLine, err := reader.ReadString('\n')
+			if err != nil {
+				return nil, err
+			}
+
+			sizeLine = strings.TrimRight(sizeLine, "\r\n")
+			if sizeLine == "" || sizeLine[0] != '$' {
+				return nil, fmt.Errorf("Expected bulk string, got: %s", sizeLine)
+			}
+
+			size, err := strconv.Atoi(sizeLine[1:])
+			if err != nil {
+				return nil, err
+			}
+
+			buf := make([]byte, size+2)
+			_, err = io.ReadFull(reader, buf)
+			if err != nil {
+				return nil, err
+			}
+
+			arg := string(buf[:size])
+			args = append(args, arg)
+		}
+		return args, nil
 	}
+
+	// Support for inline commands
+	parts := strings.Split(line, " ")
+	return parts, nil
 }
 
-func (s *Store) Close() {
-	close(s.clean)
-}
-
-func (s *Store) Get(key string) (string, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if t, ok := s.ttl[key]; ok && time.Now().After(t) {
-		s.mu.RUnlock()
-		s.mu.Lock()
-		delete(s.data, key)
-		delete(s.ttl, key)
-		s.mu.Unlock()
-		return "", false
-	}
-	v, ok := s.data[key]
-	return v, ok
-}
-
-func handleConnection(conn net.Conn) {
+func handleConnection(conn net.Conn, store *commands.Store) {
 	defer conn.Close()
 
 	reader := bufio.NewReader(conn)
+	writer := bufio.NewWriter(conn)
 
 	for {
-		message, err := reader.ReadString('\n')
+		_ = conn.SetReadDeadline(time.Now().Add(5 * time.Minute))
+		args, err := parseRESP(reader)
 		if err != nil {
-			fmt.Println("Client disconnected:", conn.RemoteAddr())
-			return
+			if err == io.EOF {
+				return
+			}
+			_, _ = writer.Write(utils.EncodeError("ERR parse error: " + err.Error()))
+			_ = writer.Flush()
+			continue
 		}
 
-		fmt.Printf("Received from %s : %s, conn.RemoteAddr() ", message, conn.RemoteAddr())
-		conn.Write([]byte("+PONG\r\n"))
+		resp := commands.HandleCommand(store, args)
+		_, _ = writer.Write(resp)
+		_ = writer.Flush()
+
+		if len(args) > 0 && strings.ToUpper(args[0]) == "QUIT" {
+			return
+		}
 	}
 }
 
 func main() {
-	fmt.Println("Starting Go Redis server on port 6378")
+	fmt.Println("Go Redis server is listening on port 6378")
 
 	listener, err := net.Listen("tcp", ":6378")
 	if err != nil {
 		panic(err)
 	}
-
 	defer listener.Close()
+
+	store := &commands.Store{
+		Data:  make(map[string]string),
+		TTL:   make(map[string]time.Time),
+		Clean: make(chan struct{}),
+	}
+
+	defer store.Close()
 
 	for {
 		conn, err := listener.Accept()
@@ -101,6 +119,6 @@ func main() {
 		}
 
 		fmt.Println("New client connected:", conn.RemoteAddr())
-		go handleConnection(conn)
+		go handleConnection(conn, store)
 	}
 }
