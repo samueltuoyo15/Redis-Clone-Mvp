@@ -1,7 +1,7 @@
-# SamsDataStore TCP Server ⚡️
+# Sams Kv-Store TCP Server ⚡️
 
 ## Overview
-SamsDataStore MVP is a high-performance, in-memory key-value store built in Go, designed to emulate a subset of Redis functionalities. This project demonstrates robust TCP networking, efficient RESP (REdis Serialization Protocol) parsing, and concurrent data handling with Time-To-Live (TTL) support, making it an excellent foundation for distributed caching or real-time data storage solutions. 🚀
+Sams Kv-Store TCP Server MVP is a high-performance, in-memory key-value store built in Go, designed to emulate a subset of Redis functionalities. This project demonstrates robust TCP networking, efficient RESP (REdis Serialization Protocol) parsing, and concurrent data handling with Time-To-Live (TTL) support, making it an excellent foundation for distributed caching or real-time data storage solutions. 🚀
 
 ## Features
 - **Concurrent TCP Server**: Manages multiple client connections simultaneously using goroutines for high throughput.
@@ -13,7 +13,7 @@ SamsDataStore MVP is a high-performance, in-memory key-value store built in Go, 
 
 ## Getting Started
 ### Installation
-To get a local copy of GoRedis Clone MVP running on your machine, follow these steps.
+To get a local copy of Sams Kv-Store TCP Server MVP running on your machine, follow these steps.
 
 1.  **Clone the Repository**:
     ```bash
@@ -52,7 +52,7 @@ To get a local copy of GoRedis Clone MVP running on your machine, follow these s
     `air` will automatically restart the server on code changes.
 
 ### Environment Variables
-No environment variables are currently required to run the GoRedis Clone MVP server, as the listening port is hardcoded to `6378`.
+No environment variables are currently required to run the Sams Kv-Store TCP Server MVP server, as the listening port is hardcoded to `6378`.
 
 ## Usage
 Once the server is running, you can interact with it using a simple TCP client like `netcat` or a Redis client that supports the RESP protocol.
